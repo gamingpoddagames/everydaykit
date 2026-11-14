@@ -51,5 +51,10 @@ jobs:
                 else result='UNEXPECTED_HOME'; fi ;;
             esac
             printf '%s: HTTP %s, %s, %s\n' "$route" "$code" "$ct" "$result"
+            if [[ "$route" == '/freesignal/auth/status' ]]; then
+              echo 'SAFE_READINESS_STATUS:'
+              cat "$out"
+              echo
+            fi
             rm -f "$out"
           done
