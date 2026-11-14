@@ -4,10 +4,13 @@
 // This endpoint NEVER publishes a video.
 const OIDC_ISSUER = "https://token.actions.githubusercontent.com";
 const OIDC_JWKS = OIDC_ISSUER + "/.well-known/jwks";
-const OIDC_AUDIENCE = "https://everydaykit.gamingpoddagames.workers.dev/freesignal/api/tiktok/creator-check";
+const API_ORIGIN = "https://everydaykit.gamingpoddagames.workers.dev/freesignal/api/tiktok/";
+const OIDC_AUDIENCE = API_ORIGIN + "creator-check";
+const POST_AUDIENCE = API_ORIGIN + "posting-token";
 const REPO = "gamingpoddagames/AutoTradingSignals";
 const REPO_ID = "1436107564";
 const WORKFLOW = REPO + "/.github/workflows/freesignal-tiktok-sandbox-check.yml@refs/heads/main";
+const POST_WORKFLOW = REPO + "/.github/workflows/freesignal-facebook-media.yml@refs/heads/main";
 const KV_KEY = "owner-tiktok-authorization";
 const TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/";
 
@@ -24,7 +27,7 @@ function decode64(s) {
   return Uint8Array.from(raw, c=>c.charCodeAt(0));
 }
 function parseJson64(s){return JSON.parse(new TextDecoder().decode(decode64(s)));}
-async function authorizedAction(request) {
+async function authorizedAction(request, purpose="probe") {
   const authorization=request.headers.get("Authorization")||"";
   if(!authorization.startsWith("Bearer "))return false;
   const token=authorization.slice(7);
@@ -35,10 +38,14 @@ async function authorizedAction(request) {
   try {header=parseJson64(parts[0]);claims=parseJson64(parts[1]);}catch{return false;}
   if(header.alg!=="RS256" || typeof header.kid!=="string" || header.kid.length>200)return false;
   const now=Math.floor(Date.now()/1000);
-  if(claims.iss!==OIDC_ISSUER || claims.aud!==OIDC_AUDIENCE ||
+  const isPosting = purpose==="posting";
+  const expectedAudience=isPosting?POST_AUDIENCE:OIDC_AUDIENCE;
+  const expectedWorkflow=isPosting?POST_WORKFLOW:WORKFLOW;
+  if(claims.iss!==OIDC_ISSUER || claims.aud!==expectedAudience ||
      claims.repository!==REPO || String(claims.repository_id)!==REPO_ID ||
-     claims.ref!=="refs/heads/main" || claims.workflow_ref!==WORKFLOW ||
-     claims.event_name!=="workflow_dispatch" ||
+     claims.ref!=="refs/heads/main" || claims.workflow_ref!==expectedWorkflow ||
+     (isPosting ? !["schedule","workflow_dispatch"].includes(claims.event_name) :
+       claims.event_name!=="workflow_dispatch") ||
      typeof claims.exp!=="number" || claims.exp<=now ||
      claims.exp>now+900 || typeof claims.iat!=="number" ||
      claims.iat>now+60 || claims.iat<now-900 ||
@@ -139,4 +146,24 @@ export async function handleTikTokCreatorCheck(request,env) {
     public_posting_approved:false,
     note:"Creator-info test only. No video was uploaded or published."
   });
+}
+
+/**
+ * Credential vending is disabled until TikTok public posting has been audited
+ * and the owner explicitly sets Worker secret TIKTOK_PUBLIC_POST_APPROVED=true.
+ * GitHub Actions must also set FREESIGNAL_TIKTOK_DIRECT_POST_APPROVED=true.
+ * A signed, short-lived GitHub OIDC JWT specific to the expected workflow is
+ * required to retrieve the access token; refresh tokens NEVER leave Cloudflare.
+ */
+export async function handleTikTokPostingToken(request,env) {
+  if(request.method!=="POST")return reply({ok:false,error:"method_not_allowed"},405);
+  if(!(await authorizedAction(request,"posting")))return reply({ok:false,error:"unauthorized_workflow"},403);
+  if(env.TIKTOK_PUBLIC_POST_APPROVED!=="true")return reply({ok:false,error:"posting_not_approved"},403);
+  if(!env.TIKTOK_AUTH || !env.TIKTOK_ENCRYPTION_SECRET || !env.TIKTOK_CLIENT_KEY || !env.TIKTOK_CLIENT_SECRET)
+    return reply({ok:false,error:"server_not_configured"},503);
+  const current=await getCurrentToken(env);
+  if(current.error)return reply({ok:false,error:current.error},503);
+  if(!String(current.scope||"").split(",").includes("video.publish"))
+    return reply({ok:false,error:"video_publish_scope_not_authorized"},403);
+  return reply({ok:true,access_token:current.token,expires_in_max_seconds:7200});
 }
