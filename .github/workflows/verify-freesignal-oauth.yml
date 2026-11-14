@@ -1,0 +1,42 @@
+name: Verify FreeSignal OAuth Worker and static assets
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/worker.js'
+      - 'wrangler.jsonc'
+      - 'public/freesignal/**'
+      - 'package.json'
+      - '.github/workflows/verify-freesignal-oauth.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install and build existing Vite site
+        run: npm ci && npm run build
+      - name: Validate secure Worker route and static site retention
+        run: |
+          node --check src/worker.js
+      - name: Verify deployment assets and configuration
+        run: |
+          test -s dist/index.html
+          test -s dist/freesignal/index.html
+          test -s dist/freesignal/terms.html
+          test -s dist/freesignal/privacy.html
+          test -s dist/freesignal/connect.html
+          test -s dist/freesignal/tiktokq0xC8VNBQluxxAAeHjmvwWRqANNCK4nY.txt
+          grep -q 'tiktok-developers-site-verification=q0xC8VNBQluxxAAeHjmvwWRqANNCK4nY' dist/freesignal/tiktokq0xC8VNBQluxxAAeHjmvwWRqANNCK4nY.txt
+          node -e "const fs=require('node:fs');const c=JSON.parse(fs.readFileSync('wrangler.jsonc','utf8'));if(c.main!=='src/worker.js'||c.assets.directory!=='./dist'||c.assets.binding!=='ASSETS'||!c.kv_namespaces.some(x=>x.binding==='TIKTOK_AUTH'))process.exit(1)"
+          echo "PASS: FreeSignal OAuth Worker syntax, public site and TikTok verification file."
