@@ -44,7 +44,8 @@ async function authorizedAction(request, purpose="probe") {
   if(claims.iss!==OIDC_ISSUER || claims.aud!==expectedAudience ||
      claims.repository!==REPO || String(claims.repository_id)!==REPO_ID ||
      claims.ref!=="refs/heads/main" || claims.workflow_ref!==expectedWorkflow ||
-     !["schedule","workflow_dispatch"].includes(claims.event_name) ||
+     !(isPosting ? ["schedule","workflow_dispatch"].includes(claims.event_name) :
+       ["schedule","workflow_dispatch","push"].includes(claims.event_name)) ||
      typeof claims.exp!=="number" || claims.exp<=now ||
      claims.exp>now+900 || typeof claims.iat!=="number" ||
      claims.iat>now+60 || claims.iat<now-900 ||
