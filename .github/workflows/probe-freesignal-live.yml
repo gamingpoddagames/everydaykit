@@ -66,3 +66,6 @@ jobs:
           else
             echo "TikTok creator-check route is not ready (HTTP $code)"
           fi
+          echo "Checking TikTok API route without credentials (HTTP status/content type only)..."
+          curl -sS -o /dev/null -w 'API creator-check anonymous POST HTTP %{http_code}, content-type %{content_type}\\n' -X POST -H 'Content-Type: application/json' --data '{}' "$base/freesignal/api/tiktok/creator-check"
+          curl -sS -o /dev/null -w 'API posting-token anonymous POST HTTP %{http_code}, content-type %{content_type}\\n' -X POST -H 'Content-Type: application/json' --data '{}' "$base/freesignal/api/tiktok/posting-token"
