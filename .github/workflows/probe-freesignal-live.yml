@@ -1,0 +1,48 @@
+name: Probe live FreeSignal OAuth routing
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/probe-freesignal-live.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Test live public routes without credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://everydaykit.gamingpoddagames.workers.dev'
+          for route in '/freesignal/' '/freesignal/connect.html' '/freesignal/auth/start' '/freesignal/auth/callback' '/freesignal/tiktokq0xC8VNBQluxxAAeHjmvwWRqANNCK4nY.txt'; do
+            out=$(mktemp)
+            code=$(curl -L -sS --max-time 15 -o "$out" -w '%{http_code}' "$base$route" || echo 'UNREACHABLE')
+            ct=$(file -b --mime-type "$out")
+            case "$route" in
+              '/freesignal/auth/start')
+                if grep -q "Use the private Connect TikTok form" "$out"; then result='WORKER_ROUTE_ACTIVE'
+                elif grep -q 'EverydayKit' "$out"; then result='STATIC_SITE_FALLBACK'
+                else result='UNEXPECTED_RESPONSE'; fi ;;
+              '/freesignal/auth/callback')
+                if grep -q 'TikTok callback not configured yet' "$out"; then result='WORKER_ROUTE_ACTIVE'
+                elif grep -q 'EverydayKit' "$out"; then result='STATIC_SITE_FALLBACK'
+                else result='UNEXPECTED_RESPONSE'; fi ;;
+              '/freesignal/tiktokq0xC8VNBQluxxAAeHjmvwWRqANNCK4nY.txt')
+                if grep -q 'tiktok-developers-site-verification=q0xC8VNBQluxxAAeHjmvwWRqANNCK4nY' "$out"; then result='VERIFICATION_FILE_OK'
+                else result='VERIFICATION_FILE_MISSING'; fi ;;
+              '/freesignal/connect.html')
+                if grep -q 'Private FreeSignal connection key' "$out"; then result='CONNECT_PAGE_OK'
+                else result='CONNECT_PAGE_MISSING'; fi ;;
+              *)
+                if grep -q 'FREE.SIGNAL' "$out"; then result='FREESIGNAL_HOME_OK'
+                else result='UNEXPECTED_HOME'; fi ;;
+            esac
+            printf '%s: HTTP %s, %s, %s\n' "$route" "$code" "$ct" "$result"
+            rm -f "$out"
+          done
