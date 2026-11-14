@@ -58,3 +58,11 @@ jobs:
             fi
             rm -f "$out"
           done
+          echo 'Checking private TikTok creator-check route rejects unauthenticated requests...'
+          reply=$(curl -sS --max-time 15 -X POST -H 'Content-Type: application/json' -d '{}' -w '\\n%{http_code}' "$base/freesignal/api/tiktok/creator-check")
+          code=$(printf '%s\\n' "$reply" | tail -n 1)
+          if [[ "$code" == "403" ]] && printf '%s\\n' "$reply" | grep -q 'unauthorized_workflow'; then
+            echo 'SAFE: TikTok creator-check route deployed and rejects unauthenticated requests'
+          else
+            echo "TikTok creator-check route is not ready (HTTP $code)"
+          fi
