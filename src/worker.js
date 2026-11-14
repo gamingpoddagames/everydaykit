@@ -56,6 +56,9 @@ function clientKeyDiagnostics(env) {
     plausible: /^[a-zA-Z0-9_-]{10,100}$/.test(key) && !/^\d{15,}$/.test(key),
     possible_app_id: /^\d{15,}$/.test(trimmed),
     has_whitespace_or_quotes: trimmed !== key || /["'\s]/.test(key),
+    length_band: key.length < 10 ? "under_10" : key.length <= 32 ? "10_to_32" : key.length <= 100 ? "33_to_100" : "over_100",
+    has_non_ascii_characters: /[^\x20-\x7e]/.test(key),
+    has_non_alphanumeric_symbols: /[^a-zA-Z0-9_-]/.test(key),
   };
 }
 function configured(env) {
