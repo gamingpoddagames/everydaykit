@@ -131,9 +131,9 @@ export default {
         checks: {
           client_credentials: typeof env.TIKTOK_CLIENT_KEY === "string" && env.TIKTOK_CLIENT_KEY.length > 0 &&
             typeof env.TIKTOK_CLIENT_SECRET === "string" && env.TIKTOK_CLIENT_SECRET.length > 0,
-          security_keys: typeof env.FREESIGNAL_OAUTH_ADMIN_KEY === "string" &&
-            env.FREESIGNAL_OAUTH_ADMIN_KEY.length >= 32 &&
-            typeof env.TIKTOK_ENCRYPTION_SECRET === "string" &&
+          admin_key_valid: typeof env.FREESIGNAL_OAUTH_ADMIN_KEY === "string" &&
+            env.FREESIGNAL_OAUTH_ADMIN_KEY.length >= 32,
+          encryption_key_valid: typeof env.TIKTOK_ENCRYPTION_SECRET === "string" &&
             env.TIKTOK_ENCRYPTION_SECRET.length >= 32,
           kv_storage: !!env.TIKTOK_AUTH && typeof env.TIKTOK_AUTH.put === "function",
         },
