@@ -82,7 +82,9 @@ async function handleStart(request, env) {
   const form = await request.formData();
   if (!equalSecret(form.get("admin_key"), env.FREESIGNAL_OAUTH_ADMIN_KEY)) return fail("Invalid owner authorization",403);
   const state = bytesRandom(24);
-  await env.TIKTOK_AUTH.put("oauth-state:"+state, "pending", {expirationTtl:600});
+  // State is bound to a Secure, HttpOnly, SameSite=Lax browser cookie.
+  // Cloudflare KV is eventually consistent across regions and cannot reliably
+  // provide immediate read-after-write for the OAuth redirect roundtrip.
   const auth = new URL("https://www.tiktok.com/v2/auth/authorize/");
   auth.searchParams.set("client_key",env.TIKTOK_CLIENT_KEY);
   auth.searchParams.set("response_type","code");
@@ -104,9 +106,8 @@ async function handleCallback(request, env) {
   if (!code || code.length > 1000 || !state || !/^([a-f0-9]{48})$/.test(state) || !equalSecret(saved,state)) {
     return fail("The connection expired or its security check failed. Start again.",403);
   }
-  const found = await env.TIKTOK_AUTH.get("oauth-state:"+state);
-  if (found !== "pending") return fail("Login session expired or already used.",403);
-  await env.TIKTOK_AUTH.delete("oauth-state:"+state);
+  // The matching random session cookie is the CSRF binding. TikTok authorization
+  // codes are one-time-use; do not depend on cross-region KV state propagation.
   const body = new URLSearchParams({
     client_key:env.TIKTOK_CLIENT_KEY,client_secret:env.TIKTOK_CLIENT_SECRET,
     code,grant_type:"authorization_code",redirect_uri:REDIRECT,
