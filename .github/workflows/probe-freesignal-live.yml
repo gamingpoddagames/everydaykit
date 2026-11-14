@@ -20,7 +20,7 @@ jobs:
         run: |
           set -euo pipefail
           base='https://everydaykit.gamingpoddagames.workers.dev'
-          for route in '/freesignal/' '/freesignal/connect.html' '/freesignal/auth/start' '/freesignal/auth/callback' '/freesignal/tiktokq0xC8VNBQluxxAAeHjmvwWRqANNCK4nY.txt'; do
+          for route in '/freesignal/' '/freesignal/connect.html' '/freesignal/auth/start' '/freesignal/auth/callback' '/freesignal/auth/status' '/freesignal/tiktokq0xC8VNBQluxxAAeHjmvwWRqANNCK4nY.txt'; do
             out=$(mktemp)
             code=$(curl -L -sS --max-time 15 -o "$out" -w '%{http_code}' "$base$route" || echo 'UNREACHABLE')
             ct=$(file -b --mime-type "$out")
@@ -29,6 +29,11 @@ jobs:
                 if grep -q "Use the private Connect TikTok form" "$out"; then result='WORKER_ROUTE_ACTIVE'
                 elif grep -q 'EverydayKit' "$out"; then result='STATIC_SITE_FALLBACK'
                 else result='UNEXPECTED_RESPONSE'; fi ;;
+              '/freesignal/auth/status')
+                if grep -q '"worker":"active"' "$out"; then
+                  if grep -q '"configured":true' "$out"; then result='OAUTH_CONFIGURED'
+                  else result='OAUTH_SECRETS_OR_KV_MISSING'; fi
+                else result='STATUS_ROUTE_UNAVAILABLE'; fi ;;
               '/freesignal/auth/callback')
                 if grep -q 'TikTok callback not configured yet' "$out"; then result='WORKER_ROUTE_ACTIVE'
                 elif grep -q 'EverydayKit' "$out"; then result='STATIC_SITE_FALLBACK'
