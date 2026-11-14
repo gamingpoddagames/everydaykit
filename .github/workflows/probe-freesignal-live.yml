@@ -1,4 +1,5 @@
 name: Probe live FreeSignal OAuth routing
+# Recheck deployed readiness route after Cloudflare Git integration catches up
 
 on:
   workflow_dispatch:
