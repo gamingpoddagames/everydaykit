@@ -122,6 +122,16 @@ async function handleCallback(request, env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === "/freesignal/auth/status") {
+      if (request.method !== "GET") return fail("Method not allowed",405);
+      return new Response(JSON.stringify({
+        service: "FreeSignal TikTok Sandbox OAuth",
+        worker: "active",
+        configured: configured(env),
+        // Never expose individual secret names, values, tokens or KV contents.
+        account_authorized: "not_publicly_disclosed",
+      }), {status:200,headers:secureHeaders({"Content-Type":"application/json; charset=utf-8"})});
+    }
     if (url.pathname === "/freesignal/auth/start") return handleStart(request,env);
     if (url.pathname === "/freesignal/auth/callback") {
       if (request.method !== "GET") return fail("Method not allowed",405);
