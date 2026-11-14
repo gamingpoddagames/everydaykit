@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'src/worker.js'
+      - 'src/tiktok_bridge.js'
       - 'wrangler.jsonc'
       - 'public/freesignal/**'
       - 'package.json'
@@ -29,6 +30,7 @@ jobs:
       - name: Validate secure Worker route and static site retention
         run: |
           node --check src/worker.js
+          node --check src/tiktok_bridge.js
       - name: Validate Wrangler Worker deployment bundle (dry run)
         run: npx --yes wrangler@4 deploy --dry-run --outdir /tmp/freesignal-worker-bundle
       - name: Verify deployment assets and configuration
