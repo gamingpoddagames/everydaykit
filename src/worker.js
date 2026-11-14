@@ -53,9 +53,9 @@ function clientKeyDiagnostics(env) {
   if (typeof key !== "string" || !key) return { plausible: false, possible_app_id: false, has_whitespace_or_quotes: false };
   const trimmed = key.trim();
   return {
-    plausible: /^[a-zA-Z0-9_-]{10,100}$/.test(key) && !/^\\d{15,}$/.test(key),
-    possible_app_id: /^\\d{15,}$/.test(trimmed),
-    has_whitespace_or_quotes: trimmed !== key || /["'\\s]/.test(key),
+    plausible: /^[a-zA-Z0-9_-]{10,100}$/.test(key) && !/^\d{15,}$/.test(key),
+    possible_app_id: /^\d{15,}$/.test(trimmed),
+    has_whitespace_or_quotes: trimmed !== key || /["'\s]/.test(key),
   };
 }
 function configured(env) {
