@@ -113,12 +113,41 @@ async function handleCallback(request, env) {
     code,grant_type:"authorization_code",redirect_uri:REDIRECT,
   });
   let token;
+  let tokenResponse;
   try {
-    const response = await fetch(TOKEN_URL,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},
-      body:body.toString(),redirect:"error"});
-    if (!response.ok) return fail("TikTok token exchange was rejected. Confirm the correct Sandbox credentials and redirect URI.",502);
-    token = await response.json();
-  } catch (_) { return fail("TikTok token exchange temporarily unavailable.",502); }
+    tokenResponse = await fetch(TOKEN_URL, {
+      method: "POST",
+      headers: {"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"},
+      body: body.toString(),
+      redirect: "follow",
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch (e) {
+    // Do not display/log the full error; some runtimes include sensitive
+    // request URLs or request details in their exception messages.
+    const kind = e?.name === "TimeoutError" || e?.name === "AbortError" ? "timeout" : "network_error";
+    return fail("TikTok token endpoint connection failed (" + kind + "). Start a new login attempt. If repeated, investigate Cloudflare outbound API connectivity.", 502);
+  }
+  try {
+    token = await tokenResponse.json();
+  } catch (_) {
+    return fail("TikTok token endpoint returned a non-JSON response (HTTP " + tokenResponse.status + "). Start a new login attempt.", 502);
+  }
+  if (!tokenResponse.ok || token?.error) {
+    // TikTok OAuth errors include short machine-readable categories and log_id.
+    // Do not relay arbitrary descriptions that may include user data.
+    const allowedErrors = new Set([
+      "invalid_client", "invalid_grant", "invalid_request", "invalid_scope",
+      "unauthorized_client", "unsupported_grant_type", "server_error",
+      "temporarily_unavailable", "access_denied",
+    ]);
+    const category = allowedErrors.has(token?.error) ? token.error : "unknown_error";
+    return fail("TikTok rejected the token exchange: " + category +
+      " (HTTP " + tokenResponse.status + "). " +
+      (category === "invalid_client" ? "Confirm that Client Key and Client Secret belong to the same Sandbox app." :
+       category === "invalid_grant" ? "Start a new authorization; the code may have expired, been reused or mismatched." :
+       "Try a new authorization session or check TikTok app settings."), 502);
+  }
   if (!token?.access_token || !token?.refresh_token || !token?.open_id) return fail("TikTok did not provide a usable user authorization.",502);
   const granted = String(token.scope||"").split(",").map(v=>v.trim());
   if (!granted.includes("video.publish")) return fail("TikTok did not grant the requested video.publish scope.",403);
