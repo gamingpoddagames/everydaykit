@@ -23,30 +23,50 @@ CF_UNICODETEXT = 13
 
 
 def clipboard_text():
-    """Get plain text from Windows clipboard without echoing its contents."""
-    user32 = ctypes.windll.user32
-    kernel32 = ctypes.windll.kernel32
-    kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
-    kernel32.GlobalLock.restype = ctypes.c_void_p
-    kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
-    kernel32.GetClipboardData.argtypes = [ctypes.c_uint]
-    kernel32.GetClipboardData.restype = ctypes.c_void_p
-    if not user32.OpenClipboard(None):
-        raise RuntimeError("Cannot read clipboard. Close any clipboard manager and retry.")
+    """Read CF_UNICODETEXT using the Win32 clipboard API safely.
+
+    The function is exported by user32.dll. Some Python ctypes versions do
+    not dynamically expose it through windll attribute access, so load the
+    Windows libraries explicitly and bind each function with getattr.
+    The returned key is never printed.
+    """
+    import ctypes.wintypes
+    user32 = ctypes.WinDLL("user32.dll", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32.dll", use_last_error=True)
+    # Resolve exported functions using GetProcAddress rather than assuming
+    # dynamic WinDLL attributes are available in the user's Python build.
+    open_clipboard = user32["OpenClipboard"]
+    get_clipboard_data = user32["GetClipboardData"]
+    close_clipboard = user32["CloseClipboard"]
+    global_lock = kernel32["GlobalLock"]
+    global_unlock = kernel32["GlobalUnlock"]
+
+    open_clipboard.argtypes = [ctypes.wintypes.HWND]
+    open_clipboard.restype = ctypes.wintypes.BOOL
+    get_clipboard_data.argtypes = [ctypes.wintypes.UINT]
+    get_clipboard_data.restype = ctypes.wintypes.HANDLE
+    close_clipboard.argtypes = []
+    close_clipboard.restype = ctypes.wintypes.BOOL
+    global_lock.argtypes = [ctypes.wintypes.HANDLE]
+    global_lock.restype = ctypes.c_void_p
+    global_unlock.argtypes = [ctypes.c_void_p]
+    global_unlock.restype = ctypes.wintypes.BOOL
+
+    if not open_clipboard(None):
+        raise RuntimeError("Clipboard is busy; close clipboard managers and try again.")
     try:
-        handle = user32.GetClipboardData(CF_UNICODETEXT)
+        handle = get_clipboard_data(CF_UNICODETEXT)
         if not handle:
-            raise RuntimeError("Clipboard contains no text. Use Copy beside Sandbox Client key.")
-        ptr = kernel32.GlobalLock(handle)
+            raise RuntimeError("Clipboard contains no plain text. Click TikTok Client key Copy icon.")
+        ptr = global_lock(handle)
         if not ptr:
-            raise RuntimeError("Windows clipboard text could not be locked.")
+            raise RuntimeError("Unable to read Windows clipboard text.")
         try:
             return ctypes.wstring_at(ptr)
         finally:
-            kernel32.GlobalUnlock(handle)
+            global_unlock(handle)
     finally:
-        user32.CloseClipboard()
-
+        close_clipboard()
 
 def public_status():
     try:
