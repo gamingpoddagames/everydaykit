@@ -4,7 +4,7 @@ import {handleTikTokCreatorCheck, handleTikTokPostingToken} from "./tiktok_bridg
 // No OAuth token, code or client secret appears in any browser response.
 const ORIGIN = "https://everydaykit.gamingpoddagames.workers.dev";
 const REDIRECT = ORIGIN + "/freesignal/auth/callback";
-const SCOPES = "user.info.basic,video.publish";
+const SCOPES = "user.info.basic,video.publish,video.upload";
 const TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/";
 
 function secureHeaders(extra = {}) {
@@ -151,7 +151,7 @@ async function handleCallback(request, env) {
   }
   if (!token?.access_token || !token?.refresh_token || !token?.open_id) return fail("TikTok did not provide a usable user authorization.",502);
   const granted = String(token.scope||"").split(",").map(v=>v.trim());
-  if (!granted.includes("video.publish")) return fail("TikTok did not grant the requested video.publish scope.",403);
+  if (!granted.includes("video.publish") || !granted.includes("video.upload")) return fail("TikTok did not grant video.publish and video.upload permissions. Reconnect after enabling both scopes in the Sandbox.",403);
   const record = {
     access_token:token.access_token,refresh_token:token.refresh_token,open_id:token.open_id,
     scope:token.scope,expires_at:Date.now()+Number(token.expires_in||0)*1000,
