@@ -72,7 +72,6 @@ function cookieValue(request, name) {
 }
 async function handleStart(request, env) {
   if (!configured(env)) return fail("TikTok server connection is not configured yet. Add the required Cloudflare secrets.", 503);
-  if (!clientKeyDiagnostics(env).plausible) return fail("TikTok Client Key format looks invalid. Check Sandbox Credentials and do not use the numeric App ID.", 503);
   if (request.method !== "POST") return fail("Use the private Connect TikTok form.", 405);
   const type = request.headers.get("content-type") || "";
   if (!type.startsWith("application/x-www-form-urlencoded")) return fail("Invalid form request",415);
@@ -140,6 +139,7 @@ export default {
         worker: "active",
         configured: configured(env),
         client_key_format: clientKeyDiagnostics(env),
+        client_key_format_note: "This is a heuristic only; TikTok does not document a required key pattern. A false result does not establish invalid credentials.",
         checks: {
           client_credentials: typeof env.TIKTOK_CLIENT_KEY === "string" && env.TIKTOK_CLIENT_KEY.length > 0 &&
             typeof env.TIKTOK_CLIENT_SECRET === "string" && env.TIKTOK_CLIENT_SECRET.length > 0,
