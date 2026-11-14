@@ -23,50 +23,26 @@ CF_UNICODETEXT = 13
 
 
 def clipboard_text():
-    """Read CF_UNICODETEXT using the Win32 clipboard API safely.
+    """Read plaintext clipboard via PowerShell, avoiding ctypes on Python 3.14.
 
-    The function is exported by user32.dll. Some Python ctypes versions do
-    not dynamically expose it through windll attribute access, so load the
-    Windows libraries explicitly and bind each function with getattr.
-    The returned key is never printed.
+    TikTok Client Key is passed only in memory to Wrangler; the value is never
+    printed or saved. PowerShell uses UTF-8 stdout to prevent cp1252 failures.
     """
-    import ctypes.wintypes
-    user32 = ctypes.WinDLL("user32.dll", use_last_error=True)
-    kernel32 = ctypes.WinDLL("kernel32.dll", use_last_error=True)
-    # Resolve exported functions using GetProcAddress rather than assuming
-    # dynamic WinDLL attributes are available in the user's Python build.
-    open_clipboard = user32["OpenClipboard"]
-    get_clipboard_data = user32["GetClipboardData"]
-    close_clipboard = user32["CloseClipboard"]
-    global_lock = kernel32["GlobalLock"]
-    global_unlock = kernel32["GlobalUnlock"]
-
-    open_clipboard.argtypes = [ctypes.wintypes.HWND]
-    open_clipboard.restype = ctypes.wintypes.BOOL
-    get_clipboard_data.argtypes = [ctypes.wintypes.UINT]
-    get_clipboard_data.restype = ctypes.wintypes.HANDLE
-    close_clipboard.argtypes = []
-    close_clipboard.restype = ctypes.wintypes.BOOL
-    global_lock.argtypes = [ctypes.wintypes.HANDLE]
-    global_lock.restype = ctypes.c_void_p
-    global_unlock.argtypes = [ctypes.c_void_p]
-    global_unlock.restype = ctypes.wintypes.BOOL
-
-    if not open_clipboard(None):
-        raise RuntimeError("Clipboard is busy; close clipboard managers and try again.")
+    command = [
+        "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+        "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); Get-Clipboard -Raw"
+    ]
+    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20)
+    if result.returncode != 0:
+        raise RuntimeError("Windows clipboard could not be read. Copy the Client Key again.")
     try:
-        handle = get_clipboard_data(CF_UNICODETEXT)
-        if not handle:
-            raise RuntimeError("Clipboard contains no plain text. Click TikTok Client key Copy icon.")
-        ptr = global_lock(handle)
-        if not ptr:
-            raise RuntimeError("Unable to read Windows clipboard text.")
-        try:
-            return ctypes.wstring_at(ptr)
-        finally:
-            global_unlock(handle)
-    finally:
-        close_clipboard()
+        clipboard = result.stdout.decode("utf-8-sig")
+    except UnicodeError:
+        raise RuntimeError("Clipboard text is not valid UTF-8.")
+    # PowerShell may add one terminal line ending. Do not silently remove
+    # other whitespace that could signal a copied placeholder.
+    return clipboard.removesuffix("\r\n").removesuffix("\n")
+
 
 def public_status():
     try:
