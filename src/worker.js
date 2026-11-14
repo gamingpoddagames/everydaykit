@@ -48,6 +48,16 @@ async function encrypt(data, secret) {
     {name:"AES-GCM",iv}, await aesKey(secret), new TextEncoder().encode(JSON.stringify(data))));
   return JSON.stringify({version:1,iv:b64(iv),ciphertext:b64(cipher)});
 }
+function clientKeyDiagnostics(env) {
+  const key = env.TIKTOK_CLIENT_KEY;
+  if (typeof key !== "string" || !key) return { plausible: false, possible_app_id: false, has_whitespace_or_quotes: false };
+  const trimmed = key.trim();
+  return {
+    plausible: /^[a-zA-Z0-9_-]{10,100}$/.test(key) && !/^\\d{15,}$/.test(key),
+    possible_app_id: /^\\d{15,}$/.test(trimmed),
+    has_whitespace_or_quotes: trimmed !== key || /["'\\s]/.test(key),
+  };
+}
 function configured(env) {
   return typeof env.TIKTOK_CLIENT_KEY === "string" && !!env.TIKTOK_CLIENT_KEY &&
     typeof env.TIKTOK_CLIENT_SECRET === "string" && !!env.TIKTOK_CLIENT_SECRET &&
@@ -62,6 +72,7 @@ function cookieValue(request, name) {
 }
 async function handleStart(request, env) {
   if (!configured(env)) return fail("TikTok server connection is not configured yet. Add the required Cloudflare secrets.", 503);
+  if (!clientKeyDiagnostics(env).plausible) return fail("TikTok Client Key format looks invalid. Check Sandbox Credentials and do not use the numeric App ID.", 503);
   if (request.method !== "POST") return fail("Use the private Connect TikTok form.", 405);
   const type = request.headers.get("content-type") || "";
   if (!type.startsWith("application/x-www-form-urlencoded")) return fail("Invalid form request",415);
@@ -128,6 +139,7 @@ export default {
         service: "FreeSignal TikTok Sandbox OAuth",
         worker: "active",
         configured: configured(env),
+        client_key_format: clientKeyDiagnostics(env),
         checks: {
           client_credentials: typeof env.TIKTOK_CLIENT_KEY === "string" && env.TIKTOK_CLIENT_KEY.length > 0 &&
             typeof env.TIKTOK_CLIENT_SECRET === "string" && env.TIKTOK_CLIENT_SECRET.length > 0,
