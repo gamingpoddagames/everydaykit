@@ -7,10 +7,12 @@ const OIDC_JWKS = OIDC_ISSUER + "/.well-known/jwks";
 const API_ORIGIN = "https://everydaykit.gamingpoddagames.workers.dev/freesignal/api/tiktok/";
 const OIDC_AUDIENCE = API_ORIGIN + "creator-check";
 const POST_AUDIENCE = API_ORIGIN + "posting-token";
+const DRAFT_AUDIENCE = API_ORIGIN + "draft-upload-token";
 const REPO = "gamingpoddagames/AutoTradingSignals";
 const REPO_ID = "1436107564";
 const WORKFLOW = REPO + "/.github/workflows/freesignal-tiktok-sandbox-check.yml@refs/heads/main";
 const POST_WORKFLOW = REPO + "/.github/workflows/freesignal-facebook-media.yml@refs/heads/main";
+const DRAFT_WORKFLOW = REPO + "/.github/workflows/freesignal-tiktok-draft-upload-test.yml@refs/heads/main";
 const KV_KEY = "owner-tiktok-authorization";
 const TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/";
 
@@ -39,12 +41,14 @@ async function authorizedAction(request, purpose="probe") {
   if(header.alg!=="RS256" || typeof header.kid!=="string" || header.kid.length>200)return false;
   const now=Math.floor(Date.now()/1000);
   const isPosting = purpose==="posting";
-  const expectedAudience=isPosting?POST_AUDIENCE:OIDC_AUDIENCE;
-  const expectedWorkflow=isPosting?POST_WORKFLOW:WORKFLOW;
+  const isDraft = purpose==="draft";
+  const expectedAudience=isDraft?DRAFT_AUDIENCE:(isPosting?POST_AUDIENCE:OIDC_AUDIENCE);
+  const expectedWorkflow=isDraft?DRAFT_WORKFLOW:(isPosting?POST_WORKFLOW:WORKFLOW);
   if(claims.iss!==OIDC_ISSUER || claims.aud!==expectedAudience ||
      claims.repository!==REPO || String(claims.repository_id)!==REPO_ID ||
      claims.ref!=="refs/heads/main" || claims.workflow_ref!==expectedWorkflow ||
-     !(isPosting ? ["schedule","workflow_dispatch"].includes(claims.event_name) :
+     !(isDraft ? ["workflow_dispatch","push"].includes(claims.event_name) :
+       isPosting ? ["schedule","workflow_dispatch"].includes(claims.event_name) :
        ["schedule","workflow_dispatch","push"].includes(claims.event_name)) ||
      typeof claims.exp!=="number" || claims.exp<=now ||
      claims.exp>now+900 || typeof claims.iat!=="number" ||
@@ -166,4 +170,22 @@ export async function handleTikTokPostingToken(request,env) {
   if(!String(current.scope||"").split(",").includes("video.publish"))
     return reply({ok:false,error:"video_publish_scope_not_authorized"},403);
   return reply({ok:true,access_token:current.token,expires_in_max_seconds:7200});
+}
+
+/**
+ * Sandbox draft-only credential broker. This endpoint does not post or create
+ * media on its own. Only the exact private test workflow on the owner repo can
+ * access a scoped token, and only when video.upload is authorized.
+ * This route is distinct from the audit-gated public Direct Post route.
+ */
+export async function handleTikTokDraftToken(request,env) {
+  if(request.method!=="POST")return reply({ok:false,error:"method_not_allowed"},405);
+  if(!(await authorizedAction(request,"draft")))return reply({ok:false,error:"unauthorized_workflow"},403);
+  if(!env.TIKTOK_AUTH || !env.TIKTOK_ENCRYPTION_SECRET || !env.TIKTOK_CLIENT_KEY || !env.TIKTOK_CLIENT_SECRET)
+    return reply({ok:false,error:"server_not_configured"},503);
+  const current=await getCurrentToken(env);
+  if(current.error)return reply({ok:false,error:current.error},503);
+  if(!String(current.scope||"").split(",").map(x=>x.trim()).includes("video.upload"))
+    return reply({ok:false,error:"video_upload_scope_missing_reauthorize"},403);
+  return reply({ok:true,access_token:current.token});
 }
