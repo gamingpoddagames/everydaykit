@@ -1,3 +1,4 @@
+import {handleTikTokCreatorCheck} from "./tiktok_bridge.js";
 // FreeSignal TikTok Login Kit — secure Cloudflare Worker OAuth callback.
 // Existing static assets are served unchanged by the ASSETS binding.
 // No OAuth token, code or client secret appears in any browser response.
@@ -165,6 +166,8 @@ async function handleCallback(request, env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === "/freesignal/api/tiktok/creator-check") return handleTikTokCreatorCheck(request, env);
+    if (url.pathname.startsWith("/freesignal/api/")) return fail("Route not found",404);
     if (url.pathname === "/freesignal/auth/status") {
       if (request.method !== "GET") return fail("Method not allowed",405);
       return new Response(JSON.stringify({
