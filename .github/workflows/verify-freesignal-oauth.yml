@@ -6,6 +6,8 @@ on:
     paths:
       - 'src/worker.js'
       - 'src/tiktok_bridge.js'
+      - 'src/promo_media.js'
+      - 'scripts/test_promo_media.mjs'
       - 'wrangler.jsonc'
       - 'public/freesignal/**'
       - 'package.json'
@@ -31,6 +33,8 @@ jobs:
         run: |
           node --check src/worker.js
           node --check src/tiktok_bridge.js
+          node --check src/promo_media.js
+          node scripts/test_promo_media.mjs
       - name: Validate Wrangler Worker deployment bundle (dry run)
         run: npx --yes wrangler@4 deploy --dry-run --outdir /tmp/freesignal-worker-bundle
       - name: Verify deployment assets and configuration

@@ -1,0 +1,43 @@
+import assert from "node:assert/strict";
+import {handlePromoMediaUpload,handlePublicPromoVideo} from "../src/promo_media.js";
+const keys=await crypto.subtle.generateKey({name:"RSASSA-PKCS1-v1_5",modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:"SHA-256"},true,["sign","verify"]);
+const jwk=await crypto.subtle.exportKey("jwk",keys.publicKey);
+jwk.kid="local-test";jwk.alg="RS256";jwk.use="sig";
+globalThis.fetch=async url=>{assert.equal(url,"https://token.actions.githubusercontent.com/.well-known/jwks");return Response.json({keys:[jwk]});};
+const encode=x=>Buffer.from(typeof x==="string"?x:JSON.stringify(x)).toString("base64url");
+async function token(changes={}){
+ const current=Math.floor(Date.now()/1000);
+ const claims={iss:"https://token.actions.githubusercontent.com",aud:"https://everydaykit.gamingpoddagames.workers.dev/freesignal/api/buffer/media-upload",repository:"gamingpoddagames/AutoTradingSignals",repository_id:"1436107564",ref:"refs/heads/main",workflow_ref:"gamingpoddagames/AutoTradingSignals/.github/workflows/freesignal-buffer-tiktok.yml@refs/heads/main",event_name:"workflow_run",iat:current,exp:current+300,...changes};
+ const data=encode({alg:"RS256",kid:"local-test"})+"."+encode(claims);
+ const signature=await crypto.subtle.sign("RSASSA-PKCS1-v1_5",keys.privateKey,new TextEncoder().encode(data));
+ return data+"."+Buffer.from(signature).toString("base64url");
+}
+const videos=new Map();
+const env={TIKTOK_AUTH:{async put(key,value,options){assert.ok(key.startsWith("public-promo-video:"));assert.equal(options.expirationTtl,2592000);videos.set(key,{value,metadata:options.metadata});},async getWithMetadata(key){return videos.get(key)||{value:null,metadata:null};}}};
+const day=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Colombo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+const data=new Uint8Array(12000);data.set(new TextEncoder().encode("ftyp"),4);
+const hash=Buffer.from(await crypto.subtle.digest("SHA-256",data)).toString("hex");
+const endpoint="https://everydaykit.gamingpoddagames.workers.dev/freesignal/api/buffer/media-upload";
+function request(jwt,extra={}){return new Request(endpoint,{method:"POST",body:data,headers:{"Authorization":"Bearer "+jwt,"Content-Type":"video/mp4","Content-Length":String(data.length),"X-FreeSignal-Date":day,"X-Content-SHA256":hash,...extra}});}
+assert.equal((await handlePromoMediaUpload(request(""),env)).status,403);
+assert.equal((await handlePromoMediaUpload(request(await token({repository:"attacker/repo"})),env)).status,403);
+assert.equal((await handlePromoMediaUpload(request(await token({workflow_ref:"gamingpoddagames/AutoTradingSignals/.github/workflows/other.yml@refs/heads/main"})),env)).status,403);
+assert.equal((await handlePromoMediaUpload(request(await token({aud:"wrong-audience"})),env)).status,403);
+assert.equal((await handlePromoMediaUpload(request(await token(),{"X-Content-SHA256":"0".repeat(64)}),env)).status,400);
+const accepted=await handlePromoMediaUpload(request(await token()),env);
+assert.equal(accepted.status,200);
+const receipt=await accepted.json();assert.equal(receipt.sha256,hash);
+const publicReply=await handlePublicPromoVideo(new Request(receipt.url),env);
+assert.equal(publicReply.status,200);assert.equal(publicReply.headers.get("Content-Type"),"video/mp4");
+assert.deepEqual(new Uint8Array(await publicReply.arrayBuffer()),data);
+const head=await handlePublicPromoVideo(new Request(receipt.url,{method:"HEAD"}),env);
+assert.equal(head.status,200);assert.equal((await head.arrayBuffer()).byteLength,0);
+const range=await handlePublicPromoVideo(new Request(receipt.url,{headers:{Range:"bytes=20-39"}}),env);
+assert.equal(range.status,206);assert.equal((await range.arrayBuffer()).byteLength,20);
+const suffix=await handlePublicPromoVideo(new Request(receipt.url,{headers:{Range:"bytes=-40"}}),env);
+assert.equal(suffix.status,206);assert.equal((await suffix.arrayBuffer()).byteLength,40);
+const clipped=await handlePublicPromoVideo(new Request(receipt.url,{headers:{Range:"bytes=0-999999"}}),env);
+assert.equal(clipped.status,206);assert.equal((await clipped.arrayBuffer()).byteLength,data.byteLength);
+assert.equal((await handlePublicPromoVideo(new Request(receipt.url,{headers:{Range:"bytes=999999-"}}),env)).status,416);
+assert.equal((await handlePublicPromoVideo(new Request("https://everydaykit.gamingpoddagames.workers.dev/freesignal/api/public-video/owner-tiktok-authorization"),env)).status,404);
+console.log("PASS: signed owner workflow uploads exact MP4; anonymous, foreign-workflow and token-record access rejected; public HEAD/Range verified");

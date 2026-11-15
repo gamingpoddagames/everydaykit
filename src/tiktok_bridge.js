@@ -8,11 +8,13 @@ const API_ORIGIN = "https://everydaykit.gamingpoddagames.workers.dev/freesignal/
 const OIDC_AUDIENCE = API_ORIGIN + "creator-check";
 const POST_AUDIENCE = API_ORIGIN + "posting-token";
 const DRAFT_AUDIENCE = API_ORIGIN + "draft-upload-token";
+const MEDIA_AUDIENCE = "https://everydaykit.gamingpoddagames.workers.dev/freesignal/api/buffer/media-upload";
 const REPO = "gamingpoddagames/AutoTradingSignals";
 const REPO_ID = "1436107564";
 const WORKFLOW = REPO + "/.github/workflows/freesignal-tiktok-sandbox-check.yml@refs/heads/main";
 const POST_WORKFLOW = REPO + "/.github/workflows/freesignal-facebook-media.yml@refs/heads/main";
 const DRAFT_WORKFLOW = REPO + "/.github/workflows/freesignal-tiktok-draft-upload-test.yml@refs/heads/main";
+const MEDIA_WORKFLOW = REPO + "/.github/workflows/freesignal-buffer-tiktok.yml@refs/heads/main";
 const KV_KEY = "owner-tiktok-authorization";
 const TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/";
 
@@ -29,7 +31,7 @@ function decode64(s) {
   return Uint8Array.from(raw, c=>c.charCodeAt(0));
 }
 function parseJson64(s){return JSON.parse(new TextDecoder().decode(decode64(s)));}
-async function authorizedAction(request, purpose="probe") {
+export async function authorizedAction(request, purpose="probe") {
   const authorization=request.headers.get("Authorization")||"";
   if(!authorization.startsWith("Bearer "))return false;
   const token=authorization.slice(7);
@@ -42,12 +44,14 @@ async function authorizedAction(request, purpose="probe") {
   const now=Math.floor(Date.now()/1000);
   const isPosting = purpose==="posting";
   const isDraft = purpose==="draft";
-  const expectedAudience=isDraft?DRAFT_AUDIENCE:(isPosting?POST_AUDIENCE:OIDC_AUDIENCE);
-  const expectedWorkflow=isDraft?DRAFT_WORKFLOW:(isPosting?POST_WORKFLOW:WORKFLOW);
+  const isMedia = purpose==="buffer_media";
+  const expectedAudience=isMedia?MEDIA_AUDIENCE:(isDraft?DRAFT_AUDIENCE:(isPosting?POST_AUDIENCE:OIDC_AUDIENCE));
+  const expectedWorkflow=isMedia?MEDIA_WORKFLOW:(isDraft?DRAFT_WORKFLOW:(isPosting?POST_WORKFLOW:WORKFLOW));
   if(claims.iss!==OIDC_ISSUER || claims.aud!==expectedAudience ||
      claims.repository!==REPO || String(claims.repository_id)!==REPO_ID ||
      claims.ref!=="refs/heads/main" || claims.workflow_ref!==expectedWorkflow ||
-     !(isDraft ? ["workflow_dispatch","push"].includes(claims.event_name) :
+     !(isMedia ? ["workflow_run","workflow_dispatch","push"].includes(claims.event_name) :
+       isDraft ? ["workflow_dispatch","push"].includes(claims.event_name) :
        isPosting ? ["schedule","workflow_dispatch"].includes(claims.event_name) :
        ["schedule","workflow_dispatch","push"].includes(claims.event_name)) ||
      typeof claims.exp!=="number" || claims.exp<=now ||
