@@ -105,10 +105,12 @@ def verify_live():
         if attempt == 5:
             raise RuntimeError("Deployment not verified: live media route must reject anonymous writes")
         time.sleep(5)
-    for path in ("/", "/freesignal/", "/freesignal/privacy.html", "/freesignal/terms.html"):
+    # Static Assets serves individual HTML files at extensionless canonical URLs.
+    # Keep redirects disabled, especially for authenticated Cloudflare requests.
+    for path in ("/", "/freesignal/", "/freesignal/privacy", "/freesignal/terms"):
         status, body = public_request(path)
         if status != 200 or b"<html" not in body.lower():
-            raise RuntimeError("Deployment not verified: an existing public site page is missing")
+            raise RuntimeError(f"Deployment not verified: public site page {path} did not return HTML (HTTP {status})")
     missing = "/freesignal/api/public-video/2000-01-01/" + "0" * 64 + ".mp4"
     status, payload = public_request(missing)
     if status != 404:
