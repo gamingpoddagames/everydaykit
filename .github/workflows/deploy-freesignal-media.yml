@@ -1,0 +1,57 @@
+name: Deploy FreeSignal Media Worker Directly
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy-freesignal-media.yml'
+      - 'scripts/prepare_freesignal_worker_deploy.py'
+      - 'scripts/test_prepare_freesignal_worker_deploy.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: everydaykit-direct-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.repository == 'gamingpoddagames/everydaykit' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: bafe94987f554f78e0b6df8a3b3c113d
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Verify deployment target and storage protections
+        run: python3 scripts/test_prepare_freesignal_worker_deploy.py
+      - name: Check existing Cloudflare access and preserve its KV binding
+        run: python3 scripts/prepare_freesignal_worker_deploy.py --prepare
+      - name: Install existing site dependencies
+        run: npm ci
+      - name: Build and verify the existing site and secure Worker
+        run: |
+          npm run build
+          node --check src/worker.js
+          node --check src/tiktok_bridge.js
+          node --check src/promo_media.js
+          node scripts/test_promo_media.mjs
+      - name: Deploy the prepared Worker with retained variables and secrets
+        run: npx --yes wrangler@4 deploy --config .freesignal-wrangler.deploy.json --keep-vars
+      - name: Verify live media authorization and existing site pages
+        run: python3 scripts/prepare_freesignal_worker_deploy.py --verify-live
+      - name: Retain sanitized deployment proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: freesignal-direct-deployment-${{ github.run_id }}
+          path: promotion_output/direct_worker_deploy_receipt.json
+          retention-days: 7
+          if-no-files-found: ignore
