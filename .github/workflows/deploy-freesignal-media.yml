@@ -9,6 +9,7 @@ on:
       - 'scripts/prepare_freesignal_worker_deploy.py'
       - 'scripts/test_prepare_freesignal_worker_deploy.py'
       - 'public/world-video-publisher/**'
+      - 'public/tiktok*.txt'
 
 permissions:
   contents: read
