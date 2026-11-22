@@ -10,6 +10,9 @@ on:
       - 'scripts/test_prepare_freesignal_worker_deploy.py'
       - 'public/world-video-publisher/**'
       - 'public/tiktok*.txt'
+      - 'src/worker.js'
+      - 'src/slnews247_tiktok_oauth.js'
+      - 'wrangler.jsonc'
 
 permissions:
   contents: read
@@ -42,6 +45,7 @@ jobs:
         run: |
           npm run build
           node --check src/worker.js
+          node --check src/slnews247_tiktok_oauth.js
           node --check src/tiktok_bridge.js
           node --check src/promo_media.js
           node scripts/test_promo_media.mjs
