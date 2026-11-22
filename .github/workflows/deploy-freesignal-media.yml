@@ -8,6 +8,7 @@ on:
       - '.github/workflows/deploy-freesignal-media.yml'
       - 'scripts/prepare_freesignal_worker_deploy.py'
       - 'scripts/test_prepare_freesignal_worker_deploy.py'
+      - 'public/world-video-publisher/**'
 
 permissions:
   contents: read
