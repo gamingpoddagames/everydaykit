@@ -61,8 +61,9 @@ def main():
         for name, value in values:
             # stdin avoids passing secret values in the process command line.
             command = [npx, "--yes", "wrangler@4", "secret", "put", name, "--name", WORKER]
-            completed = subprocess.run(command, input=value + "\n", text=True,
-                                       cwd=root, env=env, capture_output=True)
+            completed = subprocess.run(command, input=(value + "\n").encode("utf-8"),
+                                       cwd=root, env=env, stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE)
             if completed.returncode != 0:
                 print("FAILED:", name)
                 print("Wrangler command failed. Check Cloudflare login/account permissions.")
