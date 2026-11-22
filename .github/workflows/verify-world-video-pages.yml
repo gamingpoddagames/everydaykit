@@ -1,0 +1,29 @@
+name: Verify World Video Publisher legal URLs
+on:
+  push:
+    paths:
+      - '.github/workflows/verify-world-video-pages.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Check live TikTok app website, terms and privacy
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://everydaykit.gamingpoddagames.workers.dev/world-video-publisher'
+          for pair in '/|World Video Publisher' '/terms.html|Terms of Service' '/privacy.html|Privacy Policy'; do
+            route="${pair%%|*}"
+            expected="${pair#*|}"
+            dest="$(mktemp)"
+            status="$(curl -L -sS --max-time 25 -o "$dest" -w '%{http_code}' "$base$route")"
+            test "$status" = '200'
+            grep -qi "$expected" "$dest"
+            grep -q 'World Video Publisher' "$dest"
+            printf 'VERIFIED %s HTTP %s (%s)\n' "$base$route" "$status" "$expected"
+            rm -f "$dest"
+          done
