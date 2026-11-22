@@ -1,3 +1,4 @@
+import {handleSLNewsAuth} from "./slnews247_tiktok_oauth.js";
 import {handleTikTokCreatorCheck, handleTikTokPostingToken, handleTikTokDraftToken} from "./tiktok_bridge.js";
 import {handlePromoMediaUpload, handlePublicPromoVideo} from "./promo_media.js";
 // FreeSignal TikTok Login Kit — secure Cloudflare Worker OAuth callback.
@@ -167,6 +168,7 @@ async function handleCallback(request, env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname.startsWith("/slnews247/auth/")) return handleSLNewsAuth(request,env);
     if (url.pathname === "/freesignal/api/buffer/media-upload") return handlePromoMediaUpload(request,env);
     if (url.pathname.startsWith("/freesignal/api/public-video/")) return handlePublicPromoVideo(request,env);
     if (url.pathname === "/freesignal/api/tiktok/creator-check") return handleTikTokCreatorCheck(request, env);
