@@ -6,7 +6,7 @@
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
-    "run_worker_first": ["/freesignal/auth/*", "/freesignal/api/*", "/slnews247/auth/*"]
+    "run_worker_first": ["/freesignal/auth/*", "/freesignal/api/*", "/slnews247/auth/*", "/slnews247/vidiq/*"]
   },
   "kv_namespaces": [
     { "binding": "TIKTOK_AUTH" }

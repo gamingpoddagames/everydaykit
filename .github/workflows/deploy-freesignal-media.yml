@@ -12,6 +12,8 @@ on:
       - 'public/tiktok*.txt'
       - 'src/worker.js'
       - 'src/slnews247_tiktok_oauth.js'
+      - 'src/slnews_vidiq_bridge.js'
+      - 'scripts/test_slnews_vidiq_bridge.mjs'
       - 'wrangler.jsonc'
 
 permissions:
@@ -45,6 +47,8 @@ jobs:
         run: |
           npm run build
           node --check src/worker.js
+          node --check src/slnews_vidiq_bridge.js
+          node --test scripts/test_slnews_vidiq_bridge.mjs
           node --check src/slnews247_tiktok_oauth.js
           node --check src/tiktok_bridge.js
           node --check src/promo_media.js
